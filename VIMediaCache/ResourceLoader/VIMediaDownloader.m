@@ -239,11 +239,19 @@ didCompleteWithError:(nullable NSError *)error {
 #pragma mark - Notify
 
 - (void)notifyDownloadProgressWithFlush:(BOOL)flush finished:(BOOL)finished {
+    if (!self.canSaveToCache) {
+        return;
+    }
+
     double currentTime = CFAbsoluteTimeGetCurrent();
     double interval = [VICacheManager cacheUpdateNotifyInterval];
     if ((self.notifyTime < currentTime - interval) || flush) {
         self.notifyTime = currentTime;
         VICacheConfiguration *configuration = [self.cacheWorker.cacheConfiguration copy];
+        // 缓存初始化失败时没有配置对象，不能写入通知字典。
+        if (!configuration) {
+            return;
+        }
         [[NSNotificationCenter defaultCenter] postNotificationName:VICacheManagerDidUpdateCacheNotification
                                                             object:self
                                                           userInfo:@{
@@ -417,7 +425,8 @@ didCompleteWithError:(nullable NSError *)error {
 - (instancetype)initWithURL:(NSURL *)url cacheWorker:(VIMediaCacheWorker *)cacheWorker {
     self = [super init];
     if (self) {
-        _saveToCache = YES;
+        // 缓存文件不可用时继续下载，只关闭本次缓存写入。
+        _saveToCache = cacheWorker.setupError == nil;
         _url = url;
         _cacheWorker = cacheWorker;
         _info = _cacheWorker.cacheConfiguration.contentInfo;
